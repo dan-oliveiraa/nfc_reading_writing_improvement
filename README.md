@@ -16,6 +16,8 @@ The legacy architecture executed the business logic loop sequentially in Dart.
 
 **Why it fails:** This "ping-pong" approach causes the NFC Radio Frequency (RF) field to occasionally drop lock due to the asynchronous idle gaps between commands. When reading a 40-sector Mifare 4K card, these drops trigger a brute-force hardware polling loop (`amountdetect`). Because Dart is driving the state machine async, the native SDK routinely drops the card lock. This forces massive expensive reconnection retries, making the full read/write cycle take an agonizing **18+ seconds**.
 
+![Bad Flow Demo](assets/bad_flow.gif)
+
 ### ✅ The Good Way (4.0 seconds)
 The improved architecture delegates the *entire* business loop to the background Native layer.
 1. Dart compiles the full list of sectors, keys, and operations into a single structured JSON payload.
@@ -23,6 +25,8 @@ The improved architecture delegates the *entire* business loop to the background
 3. Kotlin executes the detect -> login -> read/write iterating loop robustly in a tight Native `CoroutineScope`.
 
 **Why it wins:** The native OS maintains a constant, uninterrupted lock on the NFC RF field. Reconnection drops are completely eliminated. Furthermore, trailing unsupported sectors (like the unformatted end of a 4K card) are quickly identified and skipped via early-break (`isAllKeys`) logic. The full cycle bypasses the Dart bridge entirely, completing in just **~4 seconds**.
+
+![Good Flow Demo](assets/good_flow.gif)
 
 ---
 
