@@ -95,7 +95,7 @@ void main() {
     await tester.tap(find.text('Start Lab 2'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('⚠️ Partial Success'), findsOneWidget);
+    expect(find.textContaining('Partial Success'), findsOneWidget);
     expect(find.textContaining('1 block(s) failed to write.'), findsOneWidget);
   });
 }

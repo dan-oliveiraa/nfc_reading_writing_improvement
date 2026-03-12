@@ -35,13 +35,13 @@ void main() {
     await tester.pumpWidget(const MaterialApp(home: Lab1Screen()));
 
     expect(find.text('Start Lab 1'), findsOneWidget);
-    expect(find.textContaining('✅ Success'), findsNothing);
+    expect(find.textContaining('Success'), findsNothing);
 
     await tester.tap(find.text('Start Lab 1'));
 
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('✅ Success'), findsOneWidget);
+    expect(find.textContaining('Success'), findsOneWidget);
     expect(find.textContaining('Read 40 sectors'), findsOneWidget);
     expect(find.textContaining('Written 48 blocks'), findsOneWidget);
   });
@@ -63,7 +63,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.textContaining('❌ Error: Exception: No card detected'),
+      find.textContaining('Error: Exception: No card detected'),
       findsOneWidget,
     );
   });
