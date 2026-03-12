@@ -22,19 +22,19 @@ class MainActivity : FlutterActivity() {
             CoroutineScope(Dispatchers.IO).launch {
                 when (call.method) {
                     "detect" -> {
-                        delay(40) // Mock hardware delay + RF spin up
+                        delay(40) 
                         withContext(Dispatchers.Main) { result.success(123456789) }
                     }
                     "login" -> {
                         val sector = call.argument<Int>("sector") ?: 0
                         
-                        // Mimics PaxCardReader "amountdetect" loop
+                        // Mimics "amountdetect" loop
                         var amountdetect = 0
                         var amount = 0
                         var success = false
 
                         do {
-                            delay(80) // Mock mPicc!!.m1Auth base delay
+                            delay(80)
                             
                             // Mock failure for sector >= 16 (unformatted or different key for 4k tail)
                             if (sector >= 16) {
@@ -46,22 +46,22 @@ class MainActivity : FlutterActivity() {
                             amount++
                             if (!success) {
                                 do {
-                                    delay(40) // Mock detect() delay retry
+                                    delay(40)
                                     amountdetect++
-                                } while (true /* mocked card serial */ && amountdetect <= 1)
+                                } while (true && amountdetect <= 1)
                             }
                         } while (!success && amount <= 1)
 
                         withContext(Dispatchers.Main) { result.success(success) }
                     }
                     "read" -> {
-                        delay(40) // Mock hardware delay
+                        delay(40)
                         val block = call.argument<Int>("block") ?: 0
                         val data = List(16) { it }
                         withContext(Dispatchers.Main) { result.success(data) }
                     }
                     "writeBlock" -> {
-                        delay(40) // Mock hardware delay
+                        delay(40)
                         val block = call.argument<Int>("block") ?: 0
                         withContext(Dispatchers.Main) { result.success(true) }
                     }
@@ -78,9 +78,8 @@ class MainActivity : FlutterActivity() {
                         val sectorKeys = call.argument<List<Map<String, Any>>>("sectorKeys") ?: emptyList()
                         val isAllKeys = call.argument<Boolean>("isAllKeys") ?: false
                         
-                        // Hardware detect
                         delay(20) 
-                        val serialNumber = listOf(1, 2, 3, 4) // Mock serial List<Int>
+                        val serialNumber = listOf(1, 2, 3, 4)
 
                         val resList = mutableListOf<Map<String, Any>>()
                         var lastSectorLogged = -1
