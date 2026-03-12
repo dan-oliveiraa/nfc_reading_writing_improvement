@@ -30,16 +30,16 @@ The improved architecture delegates the *entire* business loop to the background
 
 ---
 
-## 🌎 Real-World Impact: The Brasília Public Transit Top-Ups
+## 🌎 Real-World Impact: Large-Scale Deployment
 
-An improvement from 18s to 4s (a 14-second delta) is fantastic for an individual user, but what happens when deployed at a massive scale? Let's model the public transit system in a major metropolitan city like **Brasília** (population ~3 million), specifically looking at **Point-of-Sale (POS) Top-Up Kiosks and Vendor Apps** that sell transit credits and write them to Mifare cards.
+An improvement from 18s to 4s (a 14-second delta) is fantastic for an individual user, but what happens when deployed at a massive scale? Let's model a large-scale deployment (e.g., millions of users), specifically looking at **Point-of-Sale (POS) Top-Up Kiosks** that process credits or data to Mifare cards.
 
-Assuming just 200,000 citizens top-up or buy credits for their NFC transit cards every day at stations or authorized vendors:
+Assuming just 200,000 users top-up or update their NFC cards every day at kiosks or authorized terminals:
 
 ```mermaid
-pie title Total Daily Commuter Wait Times (Brasília - 200k Top-Ups)
-    "Legacy Vendor App (18s / transaction) - 1,000 Hours" : 1000
-    "Optimized Vendor App (4s / transaction) - 222 Hours" : 222
+pie title Total Daily User Wait Times (200k Top-Ups)
+    "Legacy Kiosk App (18s / transaction) - 1,000 Hours" : 1000
+    "Optimized Kiosk App (4s / transaction) - 222 Hours" : 222
 ```
 
 ```mermaid
@@ -51,10 +51,10 @@ xychart-beta
 ```
 
 #### The Math:
-- **Legacy System:** 200,000 top-up transactions × 18s = 3,600,000s = **1,000 hours** spent frozen at the vendor kiosks every single day.
-- **Optimized System:** 200,000 top-up transactions × 4s = 800,000s = **222 hours** spent writing credits to cards.
+- **Legacy System:** 200,000 top-up transactions × 18s = 3,600,000s = **1,000 hours** spent frozen at the kiosks every single day.
+- **Optimized System:** 200,000 top-up transactions × 4s = 800,000s = **222 hours** spent writing data to cards.
 
-**Conclusion:** By migrating the NFC polling logic down to the native Kotlin layer in the vendor application, you save the citizens of Brasília approximately **778 hours (or 32 entire human days) of waiting in line, *every single day*.** At high-traffic hubs during rush hour, an 18-second freeze while a vendor app struggles to write credit to a single card creates massive bottleneck queues extending out the station. A 4-second top-up keeps the line moving fluidly, drastically improving vendor throughput.
+**Conclusion:** By migrating the NFC polling logic down to the native Kotlin layer in a high-volume application, you save users approximately **778 hours (or 32 entire human days) of waiting in line, *every single day*.** At high-traffic locations during peak hours, an 18-second freeze while an app struggles to write to a single card creates massive bottleneck queues. A 4-second operation keeps the line moving fluidly, drastically improving throughput.
 
 ---
 
