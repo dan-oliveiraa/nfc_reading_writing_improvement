@@ -3,9 +3,13 @@ package com.example.nfc_reading_writing_improvement
 import androidx.annotation.NonNull
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -13,42 +17,55 @@ import kotlinx.coroutines.withContext
 class MainActivity : FlutterActivity() {
     private val CHANNEL_LAB1 = "nfc_lab1"
     private val CHANNEL_LAB2 = "nfc_lab2"
+    private val EVENT_CHANNEL_LAB2 = "nfc_lab2_progress"
+
+    // Fix #4: Single scoped coroutine with SupervisorJob — cancelled in onDestroy
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    private var progressEventSink: EventChannel.EventSink? = null
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        // LAB 1: Granular MethodChannel Calls
+        // Fix #1: EventChannel to stream sector progress back to Dart
+        EventChannel(flutterEngine.dartExecutor.binaryMessenger, EVENT_CHANNEL_LAB2)
+            .setStreamHandler(object : EventChannel.StreamHandler {
+                override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                    progressEventSink = events
+                }
+                override fun onCancel(arguments: Any?) {
+                    progressEventSink = null
+                }
+            })
+
+        // LAB 1: Granular MethodChannel Calls (unchanged — the point is to show the bad way)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL_LAB1).setMethodCallHandler { call, result ->
-            CoroutineScope(Dispatchers.IO).launch {
+            scope.launch {
                 when (call.method) {
                     "detect" -> {
-                        delay(40) 
+                        delay(40)
                         withContext(Dispatchers.Main) { result.success(123456789) }
                     }
                     "login" -> {
                         val sector = call.argument<Int>("sector") ?: 0
-                        
-                        // Mimics "amountdetect" loop
+
                         var amountdetect = 0
                         var amount = 0
                         var success = false
 
                         do {
                             delay(80)
-                            
-                            // Mock failure for sector >= 16 (unformatted or different key for 4k tail)
-                            if (sector >= 16) {
-                                success = false
+                            success = if (sector >= 16) {
+                                false
                             } else {
-                                success = amount > 0 // In real world it drops connection often due to async gaps
+                                amount > 0
                             }
-                            
                             amount++
                             if (!success) {
                                 do {
                                     delay(40)
                                     amountdetect++
-                                } while (true && amountdetect <= 1)
+                                } while (amountdetect <= 1) // Fix: removed redundant `true &&`
                             }
                         } while (!success && amount <= 1)
 
@@ -56,13 +73,11 @@ class MainActivity : FlutterActivity() {
                     }
                     "read" -> {
                         delay(40)
-                        val block = call.argument<Int>("block") ?: 0
                         val data = List(16) { it }
                         withContext(Dispatchers.Main) { result.success(data) }
                     }
                     "writeBlock" -> {
                         delay(40)
-                        val block = call.argument<Int>("block") ?: 0
                         withContext(Dispatchers.Main) { result.success(true) }
                     }
                     else -> withContext(Dispatchers.Main) { result.notImplemented() }
@@ -72,106 +87,133 @@ class MainActivity : FlutterActivity() {
 
         // LAB 2: Single Batch MethodChannel Call
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL_LAB2).setMethodCallHandler { call, result ->
-            CoroutineScope(Dispatchers.IO).launch {
+            scope.launch {
                 when (call.method) {
                     "readAll" -> {
                         val sectorKeys = call.argument<List<Map<String, Any>>>("sectorKeys") ?: emptyList()
+                        // Fix #3: cardType replaces the magic number heuristic
+                        val cardType = call.argument<String>("cardType") ?: "1K"
                         val isAllKeys = call.argument<Boolean>("isAllKeys") ?: false
-                        
-                        delay(20) 
-                        val serialNumber = listOf(1, 2, 3, 4)
+                        val maxFormattedSector = if (cardType == "4K") 16 else 0
+
+                        delay(20)
 
                         val resList = mutableListOf<Map<String, Any>>()
                         var lastSectorLogged = -1
                         var logged = false
 
-                        for (keyMap in sectorKeys) {
+                        for ((index, keyMap) in sectorKeys.withIndex()) {
                             val sector = keyMap["sector"] as Int
                             val key = keyMap["key"] as List<Int>
-                            
                             val sectorBlock = sector * 4
+
+                            // Fix #1: emit progress event to Dart before each sector
+                            withContext(Dispatchers.Main) {
+                                progressEventSink?.success(
+                                    mapOf(
+                                        "type" to "read",
+                                        "sector" to sector,
+                                        "total" to sectorKeys.size,
+                                        "index" to index
+                                    )
+                                )
+                            }
+
                             if (lastSectorLogged != sector) {
-                                if (sector >= 16) {
-                                    delay(20) // Mock Native Hardware login fail for 4K tails
+                                if (sector >= maxFormattedSector) {
+                                    delay(20)
                                     logged = false
                                 } else {
-                                    delay(40) // Mock Native Hardware login (faster, no dropped connection)
-                                    logged = true
+                                    // Fix #2: retry auth once before giving up
+                                    logged = tryLogin(sector)
                                 }
                             }
-                            
+
                             if (logged) {
                                 lastSectorLogged = sector
                                 val sectorData = mutableListOf<Int>()
-                                // Hardware read 3 blocks per sector
                                 for (i in sectorBlock until (sectorBlock + 3)) {
-                                    delay(20) // Mock native hardware read
+                                    delay(20)
                                     sectorData.addAll(List(16) { it })
                                 }
-                                resList.add(mapOf("sector" to sector, "data" to sectorData))
-                            } else if (isAllKeys && sector >= 16) {
-                                break // The improvement!
+                                // Fix #5: include success field in result
+                                resList.add(mapOf("sector" to sector, "data" to sectorData, "success" to true))
+                            } else if (isAllKeys && sector >= maxFormattedSector) {
+                                break
                             }
                         }
-                        
+
                         withContext(Dispatchers.Main) { result.success(resList) }
                     }
+
                     "writeAll" -> {
                         try {
-                            // Hardware detect (simulated)
                             delay(20)
-                            
-                            val blocks = call.argument<List<Map<String, Any>>>("blocks") ?: emptyList() // From CardUpdateDataEntity
+
+                            val blocks = call.argument<List<Map<String, Any>>>("blocks") ?: emptyList()
                             val keys = call.argument<List<Map<String, Any>>>("keys") ?: emptyList()
-                            val serialNumber = listOf(1, 2, 3, 4)
                             val isInit = call.argument<Boolean>("isInit") ?: false
-                            
+
                             var lastSector = -1
                             var logged = false
                             val writtenBlocks = mutableListOf<Map<String, Any>>()
 
-                            for (item in blocks) {
+                            for ((index, item) in blocks.withIndex()) {
                                 val itemSector = item["sector"] as Int
                                 val itemBlock = item["block"] as Int
                                 val itemType = item["type"] as String? ?: "BLOCK"
-
                                 val block = itemBlock + (itemSector * 4)
-                                
+
+                                // Fix #1: emit progress event to Dart before each block
+                                withContext(Dispatchers.Main) {
+                                    progressEventSink?.success(
+                                        mapOf(
+                                            "type" to "write",
+                                            "sector" to itemSector,
+                                            "block" to itemBlock,
+                                            "total" to blocks.size,
+                                            "index" to index
+                                        )
+                                    )
+                                }
+
                                 if (lastSector != itemSector) {
                                     val sectorKeyMap = keys.firstOrNull { it["sector"] as Int == itemSector }
                                     val sectorKey = sectorKeyMap?.get("key") as? List<Int>
-                                    
+
                                     if (sectorKey != null) {
-                                        // Mimics the Lab 2 'try/catch' -> detect -> auth flow
-                                        try {
-                                            delay(40) // Mock Native m1Auth delay
-                                            logged = true
-                                        } catch (e: Exception) {
-                                            delay(20) // Mock fast detect
-                                            delay(40) // Retry auth
-                                            logged = true
-                                        }
+                                        // Fix #2: retry auth once before giving up
+                                        logged = tryLogin(itemSector)
                                     }
                                 }
 
                                 if (logged) {
-                                    if (itemType == "BLOCK") {
-                                        delay(20) // Mock write native
-                                        writtenBlocks.add(mapOf("sector" to itemSector, "block" to itemBlock))
-                                    } else if (itemType == "DECREMENT") {
-                                        delay(20) // Mock decrement native
-                                        writtenBlocks.add(mapOf("sector" to itemSector, "block" to itemBlock))
-                                    } else {
-                                        withContext(Dispatchers.Main) {
-                                            result.error("Error", "Tipo de comando de gravação não implementado", null)
+                                    lastSector = itemSector
+                                    val writeSuccess = when (itemType) {
+                                        "BLOCK", "DECREMENT" -> {
+                                            delay(20)
+                                            true
                                         }
-                                        return@launch
+                                        else -> {
+                                            withContext(Dispatchers.Main) {
+                                                result.error("Error", "Tipo de comando de gravação não implementado: $itemType", null)
+                                            }
+                                            return@launch
+                                        }
                                     }
+                                    // Fix #5: include success field in result
+                                    writtenBlocks.add(
+                                        mapOf("sector" to itemSector, "block" to itemBlock, "success" to writeSuccess)
+                                    )
                                 } else {
+                                    // Fix #2: report failed sector instead of silently breaking
+                                    writtenBlocks.add(
+                                        mapOf("sector" to itemSector, "block" to itemBlock, "success" to false)
+                                    )
                                     break
                                 }
                             }
-                            
+
                             withContext(Dispatchers.Main) { result.success(writtenBlocks) }
                         } catch (e: Exception) {
                             withContext(Dispatchers.Main) {
@@ -179,9 +221,28 @@ class MainActivity : FlutterActivity() {
                             }
                         }
                     }
+
                     else -> withContext(Dispatchers.Main) { result.notImplemented() }
                 }
             }
         }
+    }
+
+    // Fix #2: Extracted auth helper with one retry
+    private suspend fun tryLogin(sector: Int): Boolean {
+        delay(40) // First attempt
+        val firstTry = sector < 16
+        if (firstTry) return true
+
+        // Retry once
+        delay(20) // fast re-detect
+        delay(40) // retry auth
+        return sector < 16
+    }
+
+    // Fix #4: Cancel all coroutines when Activity is destroyed
+    override fun onDestroy() {
+        super.onDestroy()
+        scope.cancel()
     }
 }
