@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../domain/entities/nfc_entities.dart';
 import '../nfc/nfc_service_lab2.dart';
@@ -11,20 +12,50 @@ class Lab2Screen extends StatefulWidget {
 
 class _Lab2ScreenState extends State<Lab2Screen> {
   final NfcServiceLab2 _nfcService = NfcServiceLab2();
+
   bool _isRunning = false;
   String _result = '';
   Duration _elapsedTime = Duration.zero;
 
+  // Fix #1: Progress state
+  StreamSubscription<NfcProgressEvent>? _progressSub;
+  String _progressLabel = '';
+  double _progressValue = 0.0;
+
+  @override
+  void dispose() {
+    _progressSub?.cancel();
+    super.dispose();
+  }
+
   void _runLab2() async {
     setState(() {
       _isRunning = true;
-      _result = 'Running...';
+      _result = '';
+      _progressLabel = '';
+      _progressValue = 0.0;
+    });
+
+    // Fix #1: Listen to progress stream before firing the batch call
+    _progressSub?.cancel();
+    _progressSub = _nfcService.progressStream.listen((event) {
+      setState(() {
+        _progressValue = event.percentage;
+        if (event.type == 'read') {
+          _progressLabel = 'Reading sector ${event.sector + 1} / ${event.total}';
+        } else {
+          _progressLabel =
+              'Writing block ${event.block} (sector ${event.sector + 1}) — ${event.index + 1}/${event.total}';
+        }
+      });
     });
 
     final stopwatch = Stopwatch()..start();
 
     try {
-      // Mock 40 sectors to read (Full Mifare Classic 4K)
+      // Fix #3: pass cardType explicitly instead of relying on magic number
+      const cardType = '4K';
+
       final keys = List.generate(
         40,
         (index) => SectorKeyEntity(
@@ -33,9 +64,8 @@ class _Lab2ScreenState extends State<Lab2Screen> {
         ),
       );
 
-      final readData = await _nfcService.read(keys);
+      final readData = await _nfcService.read(keys, cardType: cardType);
 
-      // Mock data to write
       final writeBlocks = <Map<String, dynamic>>[];
       for (int sector = 0; sector < 16; sector++) {
         writeBlocks.add({'sector': sector, 'block': 0, 'type': 'BLOCK', 'data': List.generate(16, (i) => i)});
@@ -52,23 +82,29 @@ class _Lab2ScreenState extends State<Lab2Screen> {
 
       final writtenData = await _nfcService.writeCard(writeData, 123456789);
 
+      // Fix #5: check for any failed blocks in the result
+      final failedBlocks = writtenData.where((b) => !b.success).toList();
+
       stopwatch.stop();
 
       setState(() {
         _elapsedTime = stopwatch.elapsed;
-        _result =
-            '✅ Success\nRead ${readData.length} sectors.\nWritten ${writtenData.length} blocks.\n\nElapsed Time: ${_elapsedTime.inMilliseconds} ms';
+        _progressLabel = '';
+        _progressValue = 1.0;
+        _result = failedBlocks.isEmpty
+            ? '✅ Success\nRead ${readData.length} sectors.\nWritten ${writtenData.length} blocks.\n\nElapsed Time: ${_elapsedTime.inMilliseconds} ms'
+            : '⚠️ Partial Success\nRead ${readData.length} sectors.\n${failedBlocks.length} block(s) failed to write.\n\nElapsed Time: ${_elapsedTime.inMilliseconds} ms';
       });
     } catch (e) {
       stopwatch.stop();
       setState(() {
         _elapsedTime = stopwatch.elapsed;
+        _progressLabel = '';
         _result = '❌ Error: $e\nElapsed Time: ${_elapsedTime.inMilliseconds} ms';
       });
     } finally {
-      setState(() {
-        _isRunning = false;
-      });
+      _progressSub?.cancel();
+      setState(() => _isRunning = false);
     }
   }
 
@@ -103,19 +139,38 @@ class _Lab2ScreenState extends State<Lab2Screen> {
                     : const Text('Start Lab 2', style: TextStyle(fontSize: 18)),
               ),
               const SizedBox(height: 32),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.grey[200],
-                  borderRadius: BorderRadius.circular(8),
+
+              // Fix #1: Progress bar + label
+              if (_isRunning || _progressValue > 0) ...[
+                LinearProgressIndicator(
+                  value: _progressValue,
+                  backgroundColor: Colors.grey[300],
+                  color: Colors.green,
+                  minHeight: 8,
                 ),
-                width: double.infinity,
-                child: Text(
-                  _result,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                const SizedBox(height: 8),
+                Text(
+                  _progressLabel,
+                  style: const TextStyle(fontSize: 13, color: Colors.black54),
                   textAlign: TextAlign.center,
                 ),
-              ),
+                const SizedBox(height: 16),
+              ],
+
+              if (_result.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[200],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  width: double.infinity,
+                  child: Text(
+                    _result,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
             ],
           ),
         ),
