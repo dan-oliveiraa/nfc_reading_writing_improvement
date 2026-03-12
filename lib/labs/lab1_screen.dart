@@ -24,7 +24,6 @@ class _Lab1ScreenState extends State<Lab1Screen> {
     final stopwatch = Stopwatch()..start();
 
     try {
-      // Mock 40 sectors to read (Full Mifare Classic 4K)
       final keys = List.generate(
         40,
         (index) => SectorKeyEntity(
@@ -35,19 +34,30 @@ class _Lab1ScreenState extends State<Lab1Screen> {
 
       final readData = await _nfcService.read(keys);
 
-      // Mock data to write
       final writeBlocks = <Map<String, dynamic>>[];
       for (int sector = 0; sector < 16; sector++) {
-        writeBlocks.add({'sector': sector, 'block': 0, 'type': 'BLOCK', 'data': List.generate(16, (i) => i)});
-        writeBlocks.add({'sector': sector, 'block': 1, 'type': 'BLOCK', 'data': List.generate(16, (i) => i)});
-        writeBlocks.add({'sector': sector, 'block': 2, 'type': 'BLOCK', 'data': List.generate(16, (i) => i)});
+        writeBlocks.add({
+          'sector': sector,
+          'block': 0,
+          'type': 'BLOCK',
+          'data': List.generate(16, (i) => i),
+        });
+        writeBlocks.add({
+          'sector': sector,
+          'block': 1,
+          'type': 'BLOCK',
+          'data': List.generate(16, (i) => i),
+        });
+        writeBlocks.add({
+          'sector': sector,
+          'block': 2,
+          'type': 'BLOCK',
+          'data': List.generate(16, (i) => i),
+        });
       }
 
       final writeData = CardInitDataEntity(
-        initialize: CardUpdateDataEntity(
-          keys: keys,
-          blocks: writeBlocks,
-        ),
+        initialize: CardUpdateDataEntity(keys: keys, blocks: writeBlocks),
       );
 
       final writtenData = await _nfcService.writeCard(writeData, 123456789);
@@ -63,7 +73,8 @@ class _Lab1ScreenState extends State<Lab1Screen> {
       stopwatch.stop();
       setState(() {
         _elapsedTime = stopwatch.elapsed;
-        _result = '❌ Error: $e\nElapsed Time: ${_elapsedTime.inMilliseconds} ms';
+        _result =
+            '❌ Error: $e\nElapsed Time: ${_elapsedTime.inMilliseconds} ms';
       });
     } finally {
       setState(() {
@@ -96,7 +107,10 @@ class _Lab1ScreenState extends State<Lab1Screen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.redAccent,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 16,
+                  ),
                 ),
                 child: _isRunning
                     ? const CircularProgressIndicator(color: Colors.white)
@@ -112,7 +126,10 @@ class _Lab1ScreenState extends State<Lab1Screen> {
                 width: double.infinity,
                 child: Text(
                   _result,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
                   textAlign: TextAlign.center,
                 ),
               ),

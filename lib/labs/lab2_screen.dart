@@ -17,7 +17,6 @@ class _Lab2ScreenState extends State<Lab2Screen> {
   String _result = '';
   Duration _elapsedTime = Duration.zero;
 
-  // Fix #1: Progress state
   StreamSubscription<NfcProgressEvent>? _progressSub;
   String _progressLabel = '';
   double _progressValue = 0.0;
@@ -36,13 +35,13 @@ class _Lab2ScreenState extends State<Lab2Screen> {
       _progressValue = 0.0;
     });
 
-    // Fix #1: Listen to progress stream before firing the batch call
     _progressSub?.cancel();
     _progressSub = _nfcService.progressStream.listen((event) {
       setState(() {
         _progressValue = event.percentage;
         if (event.type == 'read') {
-          _progressLabel = 'Reading sector ${event.sector + 1} / ${event.total}';
+          _progressLabel =
+              'Reading sector ${event.sector + 1} / ${event.total}';
         } else {
           _progressLabel =
               'Writing block ${event.block} (sector ${event.sector + 1}) — ${event.index + 1}/${event.total}';
@@ -53,7 +52,6 @@ class _Lab2ScreenState extends State<Lab2Screen> {
     final stopwatch = Stopwatch()..start();
 
     try {
-      // Fix #3: pass cardType explicitly instead of relying on magic number
       const cardType = '4K';
 
       final keys = List.generate(
@@ -68,21 +66,31 @@ class _Lab2ScreenState extends State<Lab2Screen> {
 
       final writeBlocks = <Map<String, dynamic>>[];
       for (int sector = 0; sector < 16; sector++) {
-        writeBlocks.add({'sector': sector, 'block': 0, 'type': 'BLOCK', 'data': List.generate(16, (i) => i)});
-        writeBlocks.add({'sector': sector, 'block': 1, 'type': 'BLOCK', 'data': List.generate(16, (i) => i)});
-        writeBlocks.add({'sector': sector, 'block': 2, 'type': 'BLOCK', 'data': List.generate(16, (i) => i)});
+        writeBlocks.add({
+          'sector': sector,
+          'block': 0,
+          'type': 'BLOCK',
+          'data': List.generate(16, (i) => i),
+        });
+        writeBlocks.add({
+          'sector': sector,
+          'block': 1,
+          'type': 'BLOCK',
+          'data': List.generate(16, (i) => i),
+        });
+        writeBlocks.add({
+          'sector': sector,
+          'block': 2,
+          'type': 'BLOCK',
+          'data': List.generate(16, (i) => i),
+        });
       }
 
       final writeData = CardInitDataEntity(
-        initialize: CardUpdateDataEntity(
-          keys: keys,
-          blocks: writeBlocks,
-        ),
+        initialize: CardUpdateDataEntity(keys: keys, blocks: writeBlocks),
       );
 
       final writtenData = await _nfcService.writeCard(writeData, 123456789);
-
-      // Fix #5: check for any failed blocks in the result
       final failedBlocks = writtenData.where((b) => !b.success).toList();
 
       stopwatch.stop();
@@ -100,7 +108,8 @@ class _Lab2ScreenState extends State<Lab2Screen> {
       setState(() {
         _elapsedTime = stopwatch.elapsed;
         _progressLabel = '';
-        _result = '❌ Error: $e\nElapsed Time: ${_elapsedTime.inMilliseconds} ms';
+        _result =
+            '❌ Error: $e\nElapsed Time: ${_elapsedTime.inMilliseconds} ms';
       });
     } finally {
       _progressSub?.cancel();
@@ -132,7 +141,10 @@ class _Lab2ScreenState extends State<Lab2Screen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 16,
+                  ),
                 ),
                 child: _isRunning
                     ? const CircularProgressIndicator(color: Colors.white)
@@ -167,7 +179,10 @@ class _Lab2ScreenState extends State<Lab2Screen> {
                   width: double.infinity,
                   child: Text(
                     _result,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                 ),

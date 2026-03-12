@@ -28,17 +28,21 @@ class NfcServiceLab1 {
           sLog += "detect ${key.sector}\n";
           final sn = await AtlasMobilePluginCardLab1.detect();
           if (sn == 0) {
-             throw Exception("No card detected");
+            throw Exception("No card detected");
           }
           serialNumberListInt = _intToList(sn);
         }
       }
-      
+
       if (serialNumberListInt.isNotEmpty) {
         int sector = key.sector * 4;
         if (lastSectorLogged != key.sector) {
           logged = await AtlasMobilePluginCardLab1.login(
-              serialNumberListInt, sector, key.key, KeyType.keyA);
+            serialNumberListInt,
+            sector,
+            key.key,
+            KeyType.keyA,
+          );
           sLog += "login ${key.sector} - success $logged\n";
           log("logou setor ${key.sector}");
         }
@@ -60,8 +64,10 @@ class NfcServiceLab1 {
   }
 
   Future<List<CardWrittenBlockEntity>> writeCard(
-      CardInitDataEntity command, int serialNumber,
-      [bool isInit = true]) async {
+    CardInitDataEntity command,
+    int serialNumber, [
+    bool isInit = true,
+  ]) async {
     final writtenBlocks = <CardWrittenBlockEntity>[];
 
     List<int> serialNumberListInt = _intToList(serialNumber);
@@ -71,7 +77,7 @@ class NfcServiceLab1 {
     if (isInit) {
       commands = command.initialize;
     } else {
-      commands = command.initialize; // assuming same model for mock, real app would use command.update
+      commands = command.initialize;
     }
 
     if (commands.blocks.isNotEmpty) {
@@ -82,35 +88,45 @@ class NfcServiceLab1 {
         int itemSector = item['sector'] as int;
         int itemBlock = item['block'] as int;
         String itemType = item['type'] as String? ?? 'BLOCK';
-        
+
         int block = itemBlock + (itemSector * 4);
 
         if (lastSector != itemSector) {
-          final sectorKeyObj = commands.keys.where((element) => element.sector == itemSector).firstOrNull;
+          final sectorKeyObj = commands.keys
+              .where((element) => element.sector == itemSector)
+              .firstOrNull;
           if (sectorKeyObj != null) {
-             logged = await AtlasMobilePluginCardLab1.login(
-                 serialNumberListInt, itemSector, sectorKeyObj.key, KeyType.keyA);
+            logged = await AtlasMobilePluginCardLab1.login(
+              serialNumberListInt,
+              itemSector,
+              sectorKeyObj.key,
+              KeyType.keyA,
+            );
           }
         }
 
         if (logged) {
           lastSector = itemSector;
-          
+
           if (itemType == 'BLOCK') {
-            // Write 
+            // Write
             final success = await AtlasMobilePluginCardLab1.writeBlock(block);
             if (success) {
-               writtenBlocks.add(CardWrittenBlockEntity(block: itemBlock, success: true));
+              writtenBlocks.add(
+                CardWrittenBlockEntity(block: itemBlock, success: true),
+              );
             } else {
-               break;
+              break;
             }
           } else if (itemType == 'DECREMENT') {
-             // Mock decrement
+            // Mock decrement
             final success = await AtlasMobilePluginCardLab1.writeBlock(block);
             if (success) {
-               writtenBlocks.add(CardWrittenBlockEntity(block: itemBlock, success: true));
+              writtenBlocks.add(
+                CardWrittenBlockEntity(block: itemBlock, success: true),
+              );
             } else {
-               break;
+              break;
             }
           }
         } else {

@@ -19,7 +19,6 @@ class MainActivity : FlutterActivity() {
     private val CHANNEL_LAB2 = "nfc_lab2"
     private val EVENT_CHANNEL_LAB2 = "nfc_lab2_progress"
 
-    // Fix #4: Single scoped coroutine with SupervisorJob — cancelled in onDestroy
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     private var progressEventSink: EventChannel.EventSink? = null
@@ -27,7 +26,6 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        // Fix #1: EventChannel to stream sector progress back to Dart
         EventChannel(flutterEngine.dartExecutor.binaryMessenger, EVENT_CHANNEL_LAB2)
             .setStreamHandler(object : EventChannel.StreamHandler {
                 override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
@@ -107,7 +105,6 @@ class MainActivity : FlutterActivity() {
                             val key = keyMap["key"] as List<Int>
                             val sectorBlock = sector * 4
 
-                            // Fix #1: emit progress event to Dart before each sector
                             withContext(Dispatchers.Main) {
                                 progressEventSink?.success(
                                     mapOf(
@@ -124,7 +121,6 @@ class MainActivity : FlutterActivity() {
                                     delay(20)
                                     logged = false
                                 } else {
-                                    // Fix #2: retry auth once before giving up
                                     logged = tryLogin(sector)
                                 }
                             }
@@ -136,7 +132,6 @@ class MainActivity : FlutterActivity() {
                                     delay(20)
                                     sectorData.addAll(List(16) { it })
                                 }
-                                // Fix #5: include success field in result
                                 resList.add(mapOf("sector" to sector, "data" to sectorData, "success" to true))
                             } else if (isAllKeys && sector >= maxFormattedSector) {
                                 break
@@ -164,7 +159,6 @@ class MainActivity : FlutterActivity() {
                                 val itemType = item["type"] as String? ?: "BLOCK"
                                 val block = itemBlock + (itemSector * 4)
 
-                                // Fix #1: emit progress event to Dart before each block
                                 withContext(Dispatchers.Main) {
                                     progressEventSink?.success(
                                         mapOf(
@@ -182,7 +176,6 @@ class MainActivity : FlutterActivity() {
                                     val sectorKey = sectorKeyMap?.get("key") as? List<Int>
 
                                     if (sectorKey != null) {
-                                        // Fix #2: retry auth once before giving up
                                         logged = tryLogin(itemSector)
                                     }
                                 }
@@ -201,12 +194,10 @@ class MainActivity : FlutterActivity() {
                                             return@launch
                                         }
                                     }
-                                    // Fix #5: include success field in result
                                     writtenBlocks.add(
                                         mapOf("sector" to itemSector, "block" to itemBlock, "success" to writeSuccess)
                                     )
                                 } else {
-                                    // Fix #2: report failed sector instead of silently breaking
                                     writtenBlocks.add(
                                         mapOf("sector" to itemSector, "block" to itemBlock, "success" to false)
                                     )
@@ -228,19 +219,16 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    // Fix #2: Extracted auth helper with one retry
     private suspend fun tryLogin(sector: Int): Boolean {
-        delay(40) // First attempt
+        delay(40)
         val firstTry = sector < 16
         if (firstTry) return true
 
-        // Retry once
-        delay(20) // fast re-detect
-        delay(40) // retry auth
+        delay(20) 
+        delay(40)
         return sector < 16
     }
 
-    // Fix #4: Cancel all coroutines when Activity is destroyed
     override fun onDestroy() {
         super.onDestroy()
         scope.cancel()
