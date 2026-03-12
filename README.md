@@ -58,6 +58,19 @@ xychart-beta
 
 ---
 
+## 🗂️ Code Walkthrough
+
+| File | Role |
+|------|------|
+| [`android/.../MainActivity.kt`](android/app/src/main/kotlin/com/example/nfc_reading_writing_improvement/MainActivity.kt) | Kotlin native layer — simulates both the chatty (Lab1) and batched (Lab2) hardware flows |
+| [`lib/nfc/atlas_mobile_plugin_card_lab1.dart`](lib/nfc/atlas_mobile_plugin_card_lab1.dart) | MethodChannel abstraction for Lab1 — one call per hardware command |
+| [`lib/nfc/nfc_service_lab1.dart`](lib/nfc/nfc_service_lab1.dart) | Lab1 business logic — Dart drives the detect → login → read/write loop |
+| [`lib/nfc/nfc_service_lab2.dart`](lib/nfc/nfc_service_lab2.dart) | Lab2 business logic — single batch call delegates the entire loop to Kotlin |
+| [`lib/labs/lab1_screen.dart`](lib/labs/lab1_screen.dart) | UI for the bad flow (~18s) |
+| [`lib/labs/lab2_screen.dart`](lib/labs/lab2_screen.dart) | UI for the optimized flow (~4s) |
+
+---
+
 ## 🧠 Core Lessons Learned
 
 1. **Avoid Chatty Bridges:** Never use a `MethodChannel` to execute a tight loop or step-by-step state machine if it interacts with time-sensitive hardware.
